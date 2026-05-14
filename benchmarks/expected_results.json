@@ -1,0 +1,7 @@
+{
+  "slug": "qaoa-tsp",
+  "backend": "vortex-noiseless",
+  "shots": 1024,
+  "qubit_count": 9,
+  "notes": "Placeholder benchmarks. Replace with measured ideal-noiseless outcomes."
+}

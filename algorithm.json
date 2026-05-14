@@ -1,0 +1,41 @@
+{
+  "slug": "qaoa-tsp",
+  "name": "QAOA - Travelling Salesman Problem",
+  "version": "1.0.0",
+  "author": "openqc-team",
+  "license": "Apache-2.0",
+  "description": "Solve the Travelling Salesman Problem using QAOA with QUBO penalty encoding. N cities are mapped to N^2 binary variables (x_{i,p} = city i at position p). Constraints enforce each city visited once and each position filled once. Practical for 3 cities (9 qubits). Based on Lucas, Frontiers in Physics 2:5 (2014).",
+  "owner": "openqc",
+  "scope": "catalog",
+  "access": "open",
+  "implementation_mode": "catalog_synced",
+  "industries": [
+    "logistics"
+  ],
+  "techniques": [
+    "qaoa"
+  ],
+  "difficulty": "intermediate",
+  "computation_model": "gate",
+  "algorithm_type": "vqa",
+  "qubit_count": 9,
+  "tags": [
+    "qaoa",
+    "optimization",
+    "tsp",
+    "combinatorial",
+    "intermediate"
+  ],
+  "metadata": {
+    "complexity_classical": "O(n!) brute force, O(n^2 * 2^n) dynamic programming",
+    "complexity_quantum": "O(poly(n)) per QAOA iteration, heuristic",
+    "year_introduced": 2014,
+    "references": [
+      "https://doi.org/10.3389/fphy.2014.00005"
+    ]
+  },
+  "status": "coming-soon",
+  "blockers": [
+    "Runnable circuit / template implementation pending."
+  ]
+}

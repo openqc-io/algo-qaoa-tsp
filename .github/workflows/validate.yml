@@ -1,0 +1,108 @@
+name: Validate Algorithm
+on: [push, pull_request]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install jsonschema qiskit
+
+      - name: Validate algorithm.json against schema + TAXONOMY
+        env:
+          INDEX_REPO_RAW: https://raw.githubusercontent.com/openqc-io/algorithms-index/main
+        run: |
+          python <<'PY'
+          import json, sys, os, urllib.request
+
+          raw = os.environ["INDEX_REPO_RAW"]
+
+          def fetch(name):
+              with urllib.request.urlopen(f"{raw}/{name}", timeout=15) as r:
+                  return json.loads(r.read())
+
+          try:
+              schema = fetch("schema.json")
+              taxonomy = fetch("TAXONOMY.json")
+          except Exception as e:
+              print(f"::error::Could not fetch schema/TAXONOMY from algorithms-index: {e}")
+              sys.exit(1)
+
+          with open("algorithm.json") as f:
+              algo = json.load(f)
+
+          import jsonschema
+          try:
+              jsonschema.validate(algo, schema)
+          except jsonschema.ValidationError as e:
+              print(f"::error::schema.json validation failed: {e.message}")
+              sys.exit(1)
+          print(f"Schema validation passed: {algo['slug']}")
+
+          valid_industries = set(taxonomy["industries"].keys())
+          valid_techniques = set(taxonomy["techniques"].keys())
+          valid_computation = set(taxonomy["computation_models"].keys())
+
+          bad = [i for i in algo["industries"] if i not in valid_industries]
+          if bad:
+              print(f"::error::Invalid industries: {bad}. Valid: {sorted(valid_industries)}")
+              sys.exit(1)
+          bad = [t for t in algo["techniques"] if t not in valid_techniques]
+          if bad:
+              print(f"::error::Invalid techniques: {bad}. Valid: {sorted(valid_techniques)}")
+              sys.exit(1)
+          if algo["computation_model"] not in valid_computation:
+              print(f"::error::Invalid computation_model: {algo['computation_model']}. Valid: {sorted(valid_computation)}")
+              sys.exit(1)
+
+          # Defense in depth — repeat the key cross-field invariants from schema.allOf.
+          if algo["access"] == "paid" and "pricing" not in algo:
+              print("::error::access=paid requires pricing")
+              sys.exit(1)
+          if algo["access"] != "paid" and "pricing" in algo:
+              print(f"::error::pricing must be absent when access={algo['access']}")
+              sys.exit(1)
+          if algo["implementation_mode"] == "hosted_api" and "provider_url" not in algo:
+              print("::error::implementation_mode=hosted_api requires provider_url")
+              sys.exit(1)
+
+          print(f"TAXONOMY + invariants OK")
+          PY
+
+      - name: Validate QASM parses
+        run: |
+          python <<'PY'
+          import os, json, sys
+          with open("algorithm.json") as f:
+              algo = json.load(f)
+
+          if algo.get("implementation_mode") == "hosted_api":
+              print("hosted_api — no local QASM expected")
+              sys.exit(0)
+
+          path = algo.get("circuit_qasm_path", "circuit.qasm")
+          if not os.path.exists(path):
+              print(f"No {path} — non-circuit algorithm or template placeholder, skipping")
+              sys.exit(0)
+
+          with open(path) as f:
+              content = f.read()
+          if "OPENQASM" not in content:
+              print(f"{path} is a placeholder — skipping parse")
+              sys.exit(0)
+
+          from qiskit import QuantumCircuit
+          try:
+              qc = QuantumCircuit.from_qasm_str(content)
+              print(f"QASM valid: {qc.num_qubits} qubits, depth {qc.depth()}")
+          except Exception as e:
+              print(f"::error::QASM parse failed: {e}")
+              sys.exit(1)
+          PY
