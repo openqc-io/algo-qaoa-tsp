@@ -12,7 +12,7 @@ vortex-compute's QAOA ansatz evolves under this cost Hamiltonian
 (Lightning lane, multi-start — the DEFER-AWF-B path).
 
 Inputs (all optional — `{}` runs the 3-city, 9-qubit demo):
-  - distance_matrix: N x N symmetric matrix (default: 3-city demo)
+  - distance_matrix: N x N matrix, N <= 5 (default: 3-city demo)
   - num_layers:      QAOA depth p, 1..6     (default: 2)
 
 Sandbox: no imports — pure dict/list logic only.
@@ -24,14 +24,35 @@ _DEMO_DISTANCES = [
     [2.0, 1.5, 0.0],
 ]
 
+# N cities -> N^2 qubits on a statevector VQA lane, and the QUBO build is
+# O(N^3). build()/interpret() run inline in vortex-job's event loop (no
+# timeout), so cap N BEFORE scanning/building anything.
+_MAX_CITIES = 5     # 25 qubits; demo is 3 cities / 9 qubits
+
+
+def _fail(message):
+    """Abort with a descriptive server-side log line. The sandbox exposes
+    no exception classes, so raise via a KeyError carrying the message
+    (executor logs it; the API returns its generic failure envelope)."""
+    return {}[message]
+
+
+def _finite(x):
+    return isinstance(x, (int, float)) and x == x and -1e300 < x < 1e300
+
 
 def _clean_matrix(raw, fallback):
-    """Accept a square numeric matrix (N >= 2); otherwise use the fallback."""
+    """Accept a square finite-numeric matrix (N >= 2); otherwise use the
+    fallback. Oversize valid-looking input is rejected loudly instead of
+    silently answering the demo problem."""
     if isinstance(raw, list) and len(raw) >= 2:
+        if len(raw) > _MAX_CITIES:
+            _fail(f"tsp: {len(raw)} cities needs {len(raw) ** 2} qubits; max "
+                  f"supported is {_MAX_CITIES} cities ({_MAX_CITIES ** 2} qubits)")
         n = len(raw)
         ok = all(
             isinstance(row, list) and len(row) == n
-            and all(isinstance(x, (int, float)) for x in row)
+            and all(_finite(x) for x in row)
             for row in raw
         )
         if ok:
@@ -43,7 +64,9 @@ def _problem(input_data):
     """Resolve (dist, N, qubo, const). Qubit index = city*N + position."""
     dist = _clean_matrix(input_data.get("distance_matrix"), _DEMO_DISTANCES)
     n = len(dist)
-    dmax = max(max(row) for row in dist)
+    # Penalty must dominate any routing saving AND stay positive even for
+    # (unusual but accepted) negative distances — scale on |d|, not d.
+    dmax = max(max(abs(x) for x in row) for row in dist)
     a_pen = 2.0 * dmax + 1.0
 
     qubo, const = {}, 0.0
