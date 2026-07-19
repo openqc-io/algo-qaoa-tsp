@@ -34,8 +34,6 @@
       "https://doi.org/10.3389/fphy.2014.00005"
     ]
   },
-  "status": "coming-soon",
-  "blockers": [
-    "Runnable circuit / template implementation pending."
-  ]
+  "status": "available",
+  "blockers": []
 }
